@@ -1,0 +1,191 @@
+library IEEE;
+use ieee.numeric_bit.all;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_UNSIGNED.ALL;
+
+entity sigmoid is
+
+Port ( U: in SIGNED (12 downto 0);
+       Y: out SIGNED (10 downto 0));
+end sigmoid;
+
+architecture Behavioral of sigmoid is
+	SIGNAL u_aux: SIGNED (12 downto 0);
+	-- Constants obtained from Python with 1 bit for signal (S), 3 bits for the integer (I) part of the number and 9 bits for fracionary (F) part of the number 
+	-- S.III.FFFFFFFFF
+	SIGNAL a1: SIGNED (12 downto 0) := "0000000010000"; -- 0.03125 
+	SIGNAL a2: SIGNED (12 downto 0) := "1111111110000"; -- -0.03125
+	SIGNAL b0: SIGNED (12 downto 0) := "0000000001001"; -- 0.017578125
+	SIGNAL b1: SIGNED (12 downto 0) := "0000010000000"; -- 0.25
+	SIGNAL b2: SIGNED (12 downto 0) := "0000010000000"; -- 0.25
+        SIGNAL b3: SIGNED (12 downto 0) := "0000000001001"; -- 0.017578125
+	SIGNAL c0: SIGNED (12 downto 0) := "0000000101110"; -- 0.08984375
+	SIGNAL c1: SIGNED (12 downto 0) := "0000100000000"; -- 0.5
+	SIGNAL c2: SIGNED (12 downto 0) := "0000100000000"; -- 0.5
+	SIGNAL c3: SIGNED (12 downto 0) := "0000111010001"; -- 0.908203125
+	SIGNAL Bottom_U: SIGNED (12 downto 0)  := "1011000000000"; -- -5
+	SIGNAL Minimum_U: SIGNED (12 downto 0) := "1100000000000";-- -4
+	SIGNAL Median_U: SIGNED (12 downto 0)  := "0000000000000";  -- 0
+	SIGNAL Maximum_U: SIGNED (12 downto 0) := "0100000000000"; -- 4
+	SIGNAL Higher_U: SIGNED (12 downto 0)  := "0101000000000"; --  5
+	
+	-- Auxiliaries for the accounts 
+	SIGNAL Equalizer13bits: SIGNED (12 downto 0);
+	SIGNAL Equalizer26bits: SIGNED (25 downto 0);
+	Shared Variable result_first_part_approx_13bits:	SIGNED (12 downto 0);
+	Shared Variable result_second_part_approx_13bits:	SIGNED (12 downto 0);
+	SIGNAL one_13bits: 	SIGNED (12 downto 0) := "0001000000000"; -- 1S.3I.9F
+	SIGNAL zero_11bits: 	SIGNED (10 downto 0) := "00000000000";   -- 1S.1I.9F
+	SIGNAL one_11bits: 	SIGNED (10 downto 0) := "01000000000";   -- 1S.1I.9F
+	
+	-- Auxiliaries for Y cases
+	Shared Variable final_value_Y:	SIGNED (10 downto 0);
+	Shared Variable y1_first_part:	SIGNED (25 downto 0);
+	Shared Variable y2_first_part:	SIGNED (25 downto 0);
+	Shared Variable y3_first_part:	SIGNED (25 downto 0);
+	Shared Variable y2_second_part:	SIGNED (25 downto 0);
+	Shared Variable y3_second_part:	SIGNED (25 downto 0);
+	Shared Variable y4_first_part:	SIGNED (25 downto 0);
+	Shared Variable y1_final_result:	SIGNED (12 downto 0);
+	Shared Variable y2_final_result:	SIGNED (12 downto 0);
+	Shared Variable y3_final_result:	SIGNED (12 downto 0);
+	Shared Variable y4_final_result:	SIGNED (12 downto 0);
+	SIGNAL y1_first_part_signal:   	SIGNED (25 downto 0);
+	SIGNAL y1_final_result_signal: 	SIGNED (12 downto 0);
+	SIGNAL y2_first_part_signal: 	 	SIGNED (25 downto 0);
+	SIGNAL y2_second_part_signal:  	SIGNED (25 downto 0);
+	SIGNAL y2_final_result_signal: 	SIGNED (12 downto 0);	
+	SIGNAL y3_first_part_signal: 	 	SIGNED (25 downto 0);
+	SIGNAL y3_second_part_signal:  	SIGNED (25 downto 0);
+	SIGNAL y3_final_result_signal: 	SIGNED (12 downto 0);
+	SIGNAL y4_first_part_signal:   	SIGNED (25 downto 0);
+	SIGNAL y4_final_result_signal: 	SIGNED (12 downto 0);
+	SIGNAL final_value_Y_signal:   	SIGNED (10 downto 0);
+	
+	begin
+	u_aux <= U;
+	process (u_aux)
+	begin
+	--Case 1 -> U is less than or equal to Bottom_U. The output is equal to 0
+		if u_aux <= Bottom_U then
+			final_value_Y := zero_11bits; -- output y=0
+
+	--Case 2 -> U is greater than Bottom_U and less than Minimum_U. The output is the result of: c0+(b0*u)
+		elsif u_aux > Bottom_U and u_aux < Minimum_U then
+			--Step 1 -> multiply b0 with u
+			y1_first_part := Equalizer26bits+b0*u;
+			y1_first_part_signal <= y1_first_part;
+			
+			--Step 2 -> approximate the 26-bit (in 2S.6I.18F config) result of Step 1 for a 13-bit in (1S.3I.9F config) value
+			result_first_part_approx_13bits(12) := y1_first_part_signal(25); --1S
+			result_first_part_approx_13bits(11 downto 0) := y1_first_part_signal(20 downto 9); --3I.9F
+			
+			--Step 3 -> sum the aproximation of Step 2 with c0 obtaininig the final result of y1
+			y1_final_result := Equalizer13bits+c0+result_first_part_approx_13bits;
+			y1_final_result_signal <= y1_final_result;
+			
+			--Step 4 -> If the final result of y1 of Step 3 is greater or equal than one (in 1S.3I.9F config) the final value of Y is one (in 1S.1I.9F config).
+			--Else, the final value of Y is an approximation of the result from Step 3 from a 13-bit (in 1S.3I.9F config) value to an 11-bit (in 1S.1I.9F config) value  
+			if y1_final_result_signal >= one_13bits then --1S.3I.9F
+				final_value_Y := one_11bits; --1S.1I.9F		
+			else 
+				final_value_Y(10) := y1_final_result_signal(12); --1S
+				final_value_Y(9 downto 0) := y1_final_result_signal(9 downto 0); --1I.9F
+			end if;
+			
+	--Case 3 -> U is greater or equal than Minimum_U and less than Median_U. The output is the result of: c1+u*(b1+a1*u)
+		elsif u_aux >= Minimum_U and u_aux < Median_U then
+			--Step 1 -> multiply a1 with u
+			y2_first_part := Equalizer26bits+a1*u;
+			y2_first_part_signal <= y2_first_part;
+			
+			--Step 2 -> approximate the 26-bit (in 2S.6I.18F config) result of Step 1 for a 13-bit (in 1S.3I.9F config) value
+			result_first_part_approx_13bits(12) := y2_first_part_signal(25); --1S
+			result_first_part_approx_13bits(11 downto 0) := y2_first_part_signal(20 downto 9); --3I.9F
+			
+			--Step 3 -> sum the aproximation of Step 2 with b1 and multiply the result with u
+			y2_second_part := Equalizer26bits+u*(b1+result_first_part_approx_13bits);
+			y2_second_part_signal <= y2_second_part;
+
+			--Step 4 -> approximate for the second time the 26-bit (in 2S.6I.18F config) result of Step 3 for a 13-bit (in 1S.3I.9F config) value
+			result_second_part_approx_13bits(12) := y2_second_part_signal(25); --1S
+			result_second_part_approx_13bits(11 downto 0) := y2_second_part_signal(20 downto 9); --3I.9F
+			
+			--Step 5 -> sum the aproximation of Step 4 with c1 obtaininig the final result of y2
+			y2_final_result := Equalizer13bits+c1+result_second_part_approx_13bits;
+			y2_final_result_signal <= y2_final_result;
+			
+			--Step 6 -> If the final result of y2 of Step 5 is greater or equal than one (in 1S.3I.9F config) the final value of Y is one (in 1S.1I.9F config).
+			--Else, the final value of Y is an approximation of the result from Step 5 from a 13-bit (in 1S.3I.9F config) value to an 11-bit (in 1S.1I.9F config) value
+			if y2_final_result_signal >= one_13bits then --1S.3I.9F
+				final_value_Y := one_11bits; --1S.1I.9F			
+			else 
+				final_value_Y(10) := y2_final_result_signal(12); --1S
+				final_value_Y(9 downto 0) := y2_final_result_signal(9 downto 0); --1I.9F
+			end if;	
+		
+	--Case 4 -> U is greater or equal than Median_U and less than Maximum_U. The output is the result of: c2+u*(b2+a2*u)
+		elsif u_aux >= Median_U and u_aux < Maximum_U then
+			--Step 1 -> multiply a2 with u
+		        y3_first_part := Equalizer26bits+a2*u;
+		        y3_first_part_signal <= y3_first_part;
+		
+			--Step 2 -> approximate the 26-bit (in 2S.6I.18F config) result of Step 1 for a 13-bit (in 1S.3I.9F config) value
+			result_first_part_approx_13bits(12) := y3_first_part_signal(25); --1S
+			result_first_part_approx_13bits(11 downto 0) := y3_first_part_signal(20 downto 9); --3I.9F
+			
+			--Step 3 -> sum the aproximation of Step 2 with b2 and multiply the result with u
+			y3_second_part := Equalizer26bits+u*(b2+result_first_part_approx_13bits);
+			y3_second_part_signal <= y3_second_part;
+			
+			--Step 4 -> approximate for the second time the 26-bit (in 2S.6I.18F config) result now of Step 3 for a 13-bit (in 1S.3I.9F config) value
+			result_second_part_approx_13bits(12) := y3_second_part_signal(25); --1S
+			result_second_part_approx_13bits(11 downto 0) := y3_second_part_signal(20 downto 9); --3I.9F
+		
+			--Step 5 -> sum the aproximation of Step 4 with c2 obtaininig the final result of y3
+			y3_final_result := Equalizer13bits+c2+result_second_part_approx_13bits;
+			y3_final_result_signal <= y3_final_result;
+			
+			--Step 6 -> If the final result of y3 of Step 5 is greater or equal than one (in 1S.3I.9F config) the final value of Y is one (in 1S.1I.9F config).
+			--Else, the final value of Y is an approximation of the result from Step 5 from a 13-bit (in 1S.3I.9F config) value to an 11-bit (in 1S.1I.9F config) value
+			if y3_final_result_signal >= one_13bits then --1S.3I.9F
+				final_value_Y := one_11bits; --1S.1I.9F					
+			else 
+				final_value_Y(10) := y3_final_result_signal(12); --1S
+				final_value_Y(9 downto 0) := y3_final_result_signal(9 downto 0); --1I.9F
+			end if;	
+		
+	--Case 5 -> U is greater or equal than Maximum_U and less than Higher_U. The output is the result of: c3+(b3*u)
+		elsif u_aux >= Maximum_U and u_aux < Higher_U then
+			--Step 1 -> multiply b3 with u
+			y4_first_part := Equalizer26bits+b3*u;
+			y4_first_part_signal <= y4_first_part;
+			
+			--Step 2 -> approximate the 26-bit (in 2S.6I.18F config) result of Step 1 to a 13-bit (in 1S.3I.9F config) value
+			result_first_part_approx_13bits(12) := y4_first_part_signal(25); --1S
+			result_first_part_approx_13bits(11 downto 0) := y4_first_part_signal(20 downto 9); --3I.9F
+			
+			--Step 3 -> sum the aproximation of Step 2 with c3 obtaininig the final result of y4
+			y4_final_result := Equalizer13bits+c3+result_first_part_approx_13bits;
+			y4_final_result_signal <= y4_final_result;		
+			
+			--Step 4 -> If the final result of y4 of Step 3 is greater or equal than one (in 1S.3I.9F config) the final value of Y is one (in 1S.1I.9F config).
+			--Else, the final value of Y is an approximation of the result from Step 3 from a 13-bit (in 1S.3I.9F config) value to an 11-bit (in 1S.1I.9F config) value
+			if y4_final_result_signal >= one_13bits then --1S.3I.9F
+				final_value_Y := one_11bits; --1S.1I.9F			
+			else 
+				final_value_Y(10) := y4_final_result_signal(12); --1S
+				final_value_Y(9 downto 0) := y4_final_result_signal(9 downto 0); --1I.9F
+			end if;
+			
+	--Case 6 -> U is greater or equal than Higher_U. The output is equal to one (in 1S.1I.9F config)
+		else 
+			final_value_Y := one_11bits; -- output y=1 
+		end if;
+	
+		final_value_Y_signal <= final_value_Y; -- Shared Variable for SIGNAL
+	end process;
+	
+	Y <= final_value_Y_signal;
+end Behavioral;

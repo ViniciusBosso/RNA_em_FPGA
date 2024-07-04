@@ -1,0 +1,119 @@
+library IEEE;
+use ieee.numeric_bit.all;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_SIGNED.ALL;
+
+entity XOR_gate is
+
+Port( input: in STD_LOGIC_VECTOR(1 downto 0);
+      an: out STD_LOGIC_VECTOR (3 downto 0);
+      output: out STD_LOGIC_VECTOR (6 downto 0)); 
+end XOR_gate;
+
+architecture Behavioral of XOR_gate is
+	component middle_layer
+		Port ( in1 : in  STD_LOGIC; --x1
+		       in2 : in  STD_LOGIC; --x2
+	               weight0  : in STD_LOGIC_VECTOR  (12 downto 0); -- w0
+		       weight1  : in STD_LOGIC_VECTOR  (12 downto 0); -- w1
+		       weight2  : in STD_LOGIC_VECTOR  (12 downto 0); -- w2
+	  	       middle_u : out STD_LOGIC_VECTOR  (12 downto 0)); -- regula os neuronios para 0 ou 1)
+	end component;			
+	
+	component output_layer
+                Port ( in1_out : in  STD_LOGIC_VECTOR  (12 downto 0); --x1
+                       in2_out : in  STD_LOGIC_VECTOR  (12 downto 0); --x2
+                       weight0_out : in STD_LOGIC_VECTOR  (12 downto 0); -- w0
+                       weight1_out : in STD_LOGIC_VECTOR  (12 downto 0); -- w1
+                       weight2_out : in STD_LOGIC_VECTOR  (12 downto 0); -- w2
+                       u_out:  out STD_LOGIC_VECTOR  (12 downto 0)); -- regula os neuronios para 0 ou 1
+        end component;
+
+	component sigmoid
+		Port (U: in STD_LOGIC_VECTOR (12 downto 0);
+		      Y: out STD_LOGIC_VECTOR (10 downto 0)); 
+	end component;			
+							
+	Shared Variable x1: STD_LOGIC;
+	Shared Variable x2: STD_LOGIC;
+	SIGNAL x: STD_LOGIC_VECTOR (1 downto 0);
+	SIGNAL inp1: STD_LOGIC;
+	SIGNAL inp2: STD_LOGIC;
+	SIGNAL w0_n1: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w1_n1: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w2_n1: STD_LOGIC_VECTOR (12 downto 0); 
+	SIGNAL w0_n2: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w1_n2: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w2_n2: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w0_out: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w1_out: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w2_out: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL meio_11bits: STD_LOGIC_VECTOR (10 downto 0) := "00100000000"; -- 0,5
+	SIGNAL u_n1: STD_LOGIC_VECTOR (12 downto 0); -- saida de n1 intermediario que vai para neuronios de saida
+	SIGNAL u_n2: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL u_ns: STD_LOGIC_VECTOR (12 downto 0);	
+	SIGNAL y_n1: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL y_n2: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL y_ns: STD_LOGIC_VECTOR (10 downto 0);
+	SIGNAL leds: STD_LOGIC_VECTOR (7 downto 0);
+	SIGNAL display: STD_LOGIC_VECTOR (6 downto 0);
+
+begin
+	inp1 <= input(1);
+	inp2 <= input(0);
+	w0_n1 <= "0.010.010101010"; -- aprox de 2,3332918
+	w1_n1 <= "1.010.111000100"; -- aprox de -5.117836
+	w2_n1 <= "1.100.000101011"; -- aprox de -3.9174376
+	w0_n2 <= "0.110.000000111"; -- aprox de 6,015332
+	w1_n2 <= "1.010.001001000"; -- aprox de -5.8599916
+	w2_n2 <= "1.011.111100110"; -- aprox de -4.052626
+	w0_out <= "1.100.111001111";-- aprox de -3,09612
+	w1_out <= "1.010.000000111";-- aprox de -5.987103
+	w2_out <= "0.110.010110110";-- aprox de 6.3557315
+
+process (inp1,inp2)
+begin
+	if inp1 = '1' then
+		x1 := '1';
+	else 
+		x1 := '0';
+	end if;		
+	
+	if inp2 = '1' then
+		x2 := '1';
+	else 
+		x2 := '0';
+	end if;	
+	x(1) <= x1;
+	x(0) <= x2;
+end process;
+
+	n1: middle_layer port map (in1=>x(1),in2=>x(0),weight0=>w0_n1,weight1=>w1_n1,
+	weight2=>w2_n1,middle_u=>u_n1);
+	
+	sigmoid_n1: sigmoid port map (U=>u_n1, Y=>y_n1(10 downto 0));
+	
+	n2: middle_layer port map (in1=>x(1), in2=>x(0), weight0=>w0_n2, weight1=>w1_n2,
+	weight2=>w2_n2, middle_u=>u_n2);
+	
+	sigmoid_n2: sigmoid port map (U=>u_n2, Y=>y_n2(10 downto 0));
+	
+	n_s: output_layer port map (in1_out=>y_n1, in2_out=>y_n2, weight0_out=>w0_out, weight1_out=>w1_out,
+	weight2_out=>w2_out, u_out=>u_ns);
+	
+	sigmoid_ns: sigmoid port map (U=>u_ns, Y=>y_ns);
+	
+process (y_ns)	
+begin
+	if y_ns >= meio_11bits then
+		display <= "1001111";
+	else 
+	        display <= "0000001";
+	end if;
+end process;
+	
+	an <= "0111";
+	output<=display;
+	LED_FPGA <= leds;
+end Behavioral;

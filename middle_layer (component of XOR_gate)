@@ -11,12 +11,11 @@ Port ( in1 : in  STD_LOGIC; --x1
        weight0  : in STD_LOGIC_VECTOR  (12 downto 0); -- w0
        weight1  : in STD_LOGIC_VECTOR  (12 downto 0); -- w1
        weight2  : in STD_LOGIC_VECTOR  (12 downto 0); -- w2
-       middle_u :  out STD_LOGIC_VECTOR  (12 downto 0)); -- regula os neuronios para 0 ou 1
+       middle_u :  out STD_LOGIC_VECTOR  (12 downto 0));
 end middle_layer;
 
 architecture Behavioral of middle_layer is
 	Shared Variable aux_u:  STD_LOGIC_VECTOR (13 downto 0);
-	--SIGNAL x0: STD_LOGIC := '1'; -- esta 1 por causa do mbp
 	SIGNAL x1: STD_LOGIC;
 	SIGNAL x2: STD_LOGIC;
 	SIGNAL w0: STD_LOGIC_VECTOR (12 downto 0);

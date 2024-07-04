@@ -1,0 +1,64 @@
+library IEEE;
+use ieee.numeric_bit.all;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_SIGNED.ALL;
+
+entity output_layer is
+	
+Port ( in1_out : in  STD_LOGIC_VECTOR (12 downto 0); --x1
+       in2_out : in  STD_LOGIC_VECTOR (12 downto 0); --x2
+       weight0_out    : in STD_LOGIC_VECTOR  (12 downto 0); -- w0
+       weight1_out    : in STD_LOGIC_VECTOR  (12 downto 0); -- w1
+       weight2_out    : in STD_LOGIC_VECTOR  (12 downto 0); -- w2
+       u_out:  out STD_LOGIC_VECTOR (12 downto 0));
+end output_layer;
+
+architecture Behavioral of output_layer is
+	Shared Variable aux_u_mult1:  STD_LOGIC_VECTOR (25 downto 0);
+	Shared Variable aux_u_mult2:  STD_LOGIC_VECTOR (25 downto 0);
+	SIGNAL aux_u_mult_signal1:  STD_LOGIC_VECTOR (25 downto 0);
+	SIGNAL aux_u_mult_signal2:  STD_LOGIC_VECTOR (25 downto 0);
+	Shared Variable u_mult1:  STD_LOGIC_VECTOR (12 downto 0);
+	Shared Variable u_mult2:  STD_LOGIC_VECTOR (12 downto 0);
+	Shared Variable aux_u:  STD_LOGIC_VECTOR (13 downto 0);
+	SIGNAL x1_out: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL x2_out: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w0_out: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w1_out: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w2_out: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL u_signal: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL Equalizer26bits: STD_LOGIC_VECTOR (25 downto 0);
+	SIGNAL Equalizer14bits: STD_LOGIC_VECTOR (13 downto 0);
+	
+	begin
+		x1_out <= in1_out;
+		x2_out <= in2_out;
+		w0_out <= weight0_out;
+		w1_out <= weight1_out;
+		w2_out <= weight2_out;
+	
+	process (in1_out,in2_out)
+		begin
+		
+		aux_u_mult1 := Equalizer26bits+(x1_out*w1_out);
+		aux_u_mult_signal1 <= aux_u_mult1;
+		
+		aux_u_mult2 := Equalizer26bits+(x2_out*w2_out);
+		aux_u_mult_signal2 <= aux_u_mult2;
+		
+		u_mult1(12) := aux_u_mult_signal1(25);
+		u_mult1(11 downto 0) := aux_u_mult_signal1(20 downto 9);
+
+		u_mult2(12) := aux_u_mult_signal2(25);
+		u_mult2(11 downto 0) := aux_u_mult_signal2(20 downto 9);
+		
+		aux_u := Equalizer14bits + w0_out + (u_mult1) + (u_mult2);  
+
+		u_signal(12) <= aux_u(13);
+		u_signal(11 downto 0) <= aux_u(11 downto 0);
+	end process;
+	
+	u_out <= u_signal;
+
+end Behavioral;

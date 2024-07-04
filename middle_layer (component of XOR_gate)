@@ -1,0 +1,54 @@
+library IEEE;
+use ieee.numeric_bit.all;
+use IEEE.STD_LOGIC_1164.ALL;
+use IEEE.STD_LOGIC_ARITH.ALL;
+use IEEE.STD_LOGIC_SIGNED.ALL;
+
+entity middle_layer is
+
+Port ( in1 : in  STD_LOGIC; --x1
+       in2 : in  STD_LOGIC; --x2
+       weight0  : in STD_LOGIC_VECTOR  (12 downto 0); -- w0
+       weight1  : in STD_LOGIC_VECTOR  (12 downto 0); -- w1
+       weight2  : in STD_LOGIC_VECTOR  (12 downto 0); -- w2
+       middle_u :  out STD_LOGIC_VECTOR  (12 downto 0)); -- regula os neuronios para 0 ou 1
+end middle_layer;
+
+architecture Behavioral of middle_layer is
+	Shared Variable aux_u:  STD_LOGIC_VECTOR (13 downto 0);
+	--SIGNAL x0: STD_LOGIC := '1'; -- esta 1 por causa do mbp
+	SIGNAL x1: STD_LOGIC;
+	SIGNAL x2: STD_LOGIC;
+	SIGNAL w0: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w1: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL w2: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL u: STD_LOGIC_VECTOR (12 downto 0);
+	SIGNAL Resposta14bits: STD_LOGIC_VECTOR (13 downto 0);
+	begin
+		x1 <= in1;
+		x2 <= in2;
+		w0 <= weight0;
+		
+	process (in1,in2)
+		begin
+		if x1 = '1' then
+			w1 <= weight1;
+		else
+			w1 <= "0000000000000";
+		end if;
+		
+		if x2 = '1' then
+			w2 <= weight2;
+		else
+			w2 <= "0000000000000";
+		end if;
+
+		aux_u := Resposta14bits+w0+w1+w2;
+		
+		u(12) <= aux_u(13);
+		u(11 downto 0) <= aux_u(11 downto 0);
+	end process;
+	
+	middle_u <= u;
+
+end Behavioral;
